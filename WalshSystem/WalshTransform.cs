@@ -5,10 +5,8 @@ namespace WalshSystem
 {
     public static class WalshTransform
     {
-        public static Func<double, double> PartialSum(Func<double, double> func, int k)
+        public static Func<double, double> PartialSum(Func<double, double> func, int n)
         {
-            var n = 1 << k;
-            
             return x => Enumerable.Range(0, n)
                 .Select(i => func(i / (n - 1.0)) * Walsh.Get(i)(Math.Min(x, 1 - 1.0 / n)))
                 .Sum();
@@ -76,22 +74,55 @@ namespace WalshSystem
             return FastWalshHadamardTransform(coefficients).Select(x => x / coefficients.Length).ToArray();
         }
 
-        private static double GetCoefficientOneK(Func<double, double> f, Func<double, double> df, int k)
+        private static int BinaryInverse(int number, int n)
         {
-            return k < 1 
-                ? f(0) 
-                : Integral.Rectangular(t => df(t) * Walsh.Get(k - 1)(t), n: 1 << 1);
+            var result = 0;
+
+            for (int i = 1, pow2K = 1 << (n - 1); i <= n; i++, pow2K >>= 1)
+            {
+                if (number == 0) break;
+                
+                result += number / pow2K * (1 << (i - 1));
+                number %= pow2K;
+            }
+            
+            return result;
+        }
+
+        public static double[] FastWalshTransform(double[] array)
+        {
+            var result = new double[array.Length];
+            var n = (int) Math.Log(result.Length, 2);
+            
+            for (var i = 0; i < result.Length; i++)
+            {
+                result[BinaryInverse(i, n)] = array[i];
+            }
+
+            return FastWalshHadamardTransform(result);
+        }
+        
+        public static double[] InverseFastWalshTransform(double[] coefficients)
+        {
+            return FastWalshTransform(coefficients).Select(x => x / coefficients.Length).ToArray();
+        }
+
+        public static double GetCoefficientOneK(Func<double, double> f, Func<double, double> df, int k, int n = 1 << 6)
+        {
+            return k < 1
+                ? f(0)
+                : Integral.Rectangular(t => df(t) * Walsh.Get(k - 1)(t), n: n);
 
             // return Integral.Trapezoid(t => k > 0 ? fs(t) *  Walsh.Get(0, k - 1)(t) : 0, 0, 1, 1 << k);
         }
 
-        public static Func<double, double> PartialSumOneK(Func<double, double> f, Func<double, double> fs, int n)
+        public static Func<double, double> PartialSumOneK(Func<double, double> f, Func<double, double> df, int n)
         {
             // return x => Enumerable.Range(0, n)
             //     .Select(k => GetCoefficientOneK(k, fs) * Walsh.Get(1, k)(x))
             //     .Sum();
 
-            var c = Enumerable.Range(0, n).Select(i => GetCoefficientOneK(f, fs, i)).ToArray();
+            var c = Enumerable.Range(0, n).Select(i => GetCoefficientOneK(f, df, i, n)).ToArray();
 
             return x => Enumerable.Range(0, n)
                 .Select(k => c[k] * Walsh.GetOneK(k)(x))
@@ -103,15 +134,15 @@ namespace WalshSystem
             var n = 1 << k;
 
             var arr = Enumerable.Range(0, n)
-                .Select(i => df(i / (n - 1.0)))
+                .Select(i => df((i + .5) / n))
                 .ToArray();
 
-            return FastWalshHadamardTransform(arr);
+            return FastWalshTransform(arr);
         }
 
         public static Func<double, double> InverseFastWalshSobolevTransform(double[] coefficients, double f0)
         {
-            var df = InverseFastWalshHadamardTransform(coefficients);
+            var df = InverseFastWalshTransform(coefficients);
             var s = new double[df.Length + 1];
 
             s[0] = f0;
@@ -131,7 +162,7 @@ namespace WalshSystem
                 var rp = (index + 1.0) / df.Length;
                 var ls = s[index];
                 var rs = s[index + 1];
-                var p = (x - lp) / (rp - lp);
+                var p = (x - lp) * df.Length;
                 
                 return ls + (rs - ls) * p;
             };

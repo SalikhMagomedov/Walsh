@@ -47,9 +47,7 @@ namespace Tests
 
             var actual = _xArray.Select(x => w(x));
 
-            actual.Zip(_xArray, (y, x) => y - x)
-                .Should()
-                .OnlyContain(d => d < 1e-10);
+            actual.Should().Equal(_xArray, (a, e) => Math.Abs(a - e) < 1e-10);
         }
 
         [TestCase(0, 0)]
