@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace WalshSystem
@@ -10,17 +11,11 @@ namespace WalshSystem
             return x => Enumerable.Range(0, n)
                 .Select(i => func(i / (n - 1.0)) * Walsh.Get(i)(Math.Min(x, 1 - 1.0 / n)))
                 .Sum();
-
-            // return x => Enumerable.Range(0, n)
-            //     .Select(i => i / (double) n)
-            //     .Select(t => func(t) * Walsh.Get((int) (x * n))(t))
-            //     .Sum();
         }
-        
-        public static double[] ForwardTransform(double[] y, WalshMatrixOrdering ordering = WalshMatrixOrdering.Dyadic)
+
+        private static IEnumerable<double> BaseTransform(IReadOnlyList<double> y, WalshMatrixOrdering ordering)
         {
-            var length = y.Length;
-            var result = new double[length];
+            var length = y.Count;
 
             var k = (int) Math.Log(length, 2);
             var w = Walsh.GetMatrix(k, ordering);
@@ -32,23 +27,26 @@ namespace WalshSystem
                     s += y[j] * w[i, j];
                 }
 
-                result[i] = s;
+                yield return s;
             }
-
-            return result;
         }
 
-        public static double[] InverseTransform(double[] coefficients,
+        public static IEnumerable<double> ForwardTransform(IReadOnlyList<double> y, WalshMatrixOrdering ordering = WalshMatrixOrdering.Dyadic)
+        {
+            return BaseTransform(y, ordering).Select(d => d / y.Count).ToArray();
+        }
+
+        public static IEnumerable<double> InverseTransform(double[] coefficients,
             WalshMatrixOrdering ordering = WalshMatrixOrdering.Dyadic)
         {
-            return ForwardTransform(coefficients, ordering).Select(x => x / coefficients.Length).ToArray();
+            return BaseTransform(coefficients, ordering);
         }
 
-        public static double[] FastWalshHadamardTransform(double[] array)
+        private static IEnumerable<double> BaseFastWalshHadamardTransform(double[] array)
         {
             var result = new double[array.Length];
             array.CopyTo(result, 0);
-            
+
             var h = 1;
             while (h < result.Length)
             {
@@ -58,20 +56,26 @@ namespace WalshSystem
                     {
                         var x = result[j];
                         var y = result[j + h];
-                        
+
                         result[j] = x + y;
                         result[j + h] = x - y;
                     }
                 }
+
                 h *= 2;
             }
-            
+
             return result;
         }
 
-        public static double[] InverseFastWalshHadamardTransform(double[] coefficients)
+        public static IEnumerable<double> FastWalshHadamardTransform(double[] array)
         {
-            return FastWalshHadamardTransform(coefficients).Select(x => x / coefficients.Length).ToArray();
+            return BaseFastWalshHadamardTransform(array).Select(d => d / array.Length);
+        }
+
+        public static IEnumerable<double> InverseFastWalshHadamardTransform(double[] coefficients)
+        {
+            return BaseFastWalshHadamardTransform(coefficients);
         }
 
         private static int BinaryInverse(int number, int n)
@@ -89,52 +93,79 @@ namespace WalshSystem
             return result;
         }
 
-        public static double[] FastWalshTransform(double[] array)
+        private static double[] BinaryReversedArray(IReadOnlyList<double> array)
         {
-            var result = new double[array.Length];
+            var result = new double[array.Count];
             var n = (int) Math.Log(result.Length, 2);
-            
+
             for (var i = 0; i < result.Length; i++)
             {
                 result[BinaryInverse(i, n)] = array[i];
             }
 
+            return result;
+        }
+
+        public static IEnumerable<double> FastWalshTransform(double[] array)
+        {
+            var result = BinaryReversedArray(array);
+
             return FastWalshHadamardTransform(result);
         }
-        
-        public static double[] InverseFastWalshTransform(double[] coefficients)
+
+        public static IEnumerable<double> InverseFastWalshTransform(double[] coefficients)
         {
-            return FastWalshTransform(coefficients).Select(x => x / coefficients.Length).ToArray();
+            var result = BinaryReversedArray(coefficients);
+            
+            return BaseFastWalshHadamardTransform(result);
         }
 
         public static double GetCoefficientOneK(Func<double, double> f, Func<double, double> df, int k, int n = 1 << 6)
         {
-            return k < 1
-                ? f(0)
-                : Integral.Rectangular(t => df(t) * Walsh.Get(k - 1)(t), n: n);
-
-            // return Integral.Trapezoid(t => k > 0 ? fs(t) *  Walsh.Get(0, k - 1)(t) : 0, 0, 1, 1 << k);
+            return Integral.Rectangular(t => df(t) * Walsh.Get(k - 1)(t), n: n);
         }
 
-        public static Func<double, double> PartialSumOneK(Func<double, double> f, Func<double, double> df, int n)
+        public static double GetCoefficientOneK(Func<double, double> f, int k)
         {
-            // return x => Enumerable.Range(0, n)
-            //     .Select(k => GetCoefficientOneK(k, fs) * Walsh.Get(1, k)(x))
-            //     .Sum();
+            if (k <= 1) return f(1) - f(0);
 
-            var c = Enumerable.Range(0, n).Select(i => GetCoefficientOneK(f, df, i, n)).ToArray();
+            k--;
 
-            return x => Enumerable.Range(0, n)
-                .Select(k => c[k] * Walsh.GetOneK(k)(x))
-                .Sum();
+            var n = (int) Math.Log(k, 2) + 1;
+            var w = Walsh.GetMatrix(n);
+            var pow2N = Math.Pow(2, n);
+
+            var result = 0.0;
+            for (var i = 0; i < pow2N; i++)
+            {
+                result += w[k, i] * (f((i + 1) / pow2N) - f(i / pow2N));
+            }
+
+            return result;
         }
 
-        public static double[] FastWalshSobolevTransform(Func<double, double> df, int k)
+        public static Func<double, double> PartialSumOneK(Func<double, double> f, int n)
+        {
+            IEnumerable<(double c, Func<double, double> w)> data = Enumerable.Range(1, n)
+                .Select(i => (GetCoefficientOneK(f, i), Walsh.GetOneK(i)));
+            
+            return x => f(0) + data.Select(d => d.c * d.w(x)).Sum();
+        }
+
+        public static Func<double, double> PartialSumOneK(double f0, IEnumerable<double> coefficients)
+        {
+            IEnumerable<(double c, Func<double, double> w)> data =
+                coefficients.Select((c, i) => (c, Walsh.GetOneK(i + 1)));
+
+            return x => f0 + data.Select(d => d.c * d.w(x)).Sum();
+        }
+
+        public static IEnumerable<double> FastWalshSobolevTransform(Func<double, double> f, int k)
         {
             var n = 1 << k;
 
             var arr = Enumerable.Range(0, n)
-                .Select(i => df((i + .5) / n))
+                .Select(i => (f((i + 1.0) / n) - f((double) i / n)) * n)
                 .ToArray();
 
             return FastWalshTransform(arr);
@@ -142,7 +173,7 @@ namespace WalshSystem
 
         public static Func<double, double> InverseFastWalshSobolevTransform(double[] coefficients, double f0)
         {
-            var df = InverseFastWalshTransform(coefficients);
+            var df = InverseFastWalshTransform(coefficients).ToArray();
             var s = new double[df.Length + 1];
 
             s[0] = f0;
@@ -155,11 +186,16 @@ namespace WalshSystem
             return x =>
             {
                 if (x <= 0) return s[0];
-                if (x >= 1) return s[s.Length - 1];
+                if (x >= 1) return s[df.Length];
 
                 var index = (int) (x * df.Length);
+
+                if (Math.Abs(index - x * df.Length) < double.Epsilon)
+                {
+                    return s[index];
+                }
+                
                 var lp = (double) index / df.Length;
-                var rp = (index + 1.0) / df.Length;
                 var ls = s[index];
                 var rs = s[index + 1];
                 var p = (x - lp) * df.Length;

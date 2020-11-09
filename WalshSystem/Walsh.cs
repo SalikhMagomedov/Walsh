@@ -32,9 +32,6 @@ namespace WalshSystem
             {
                 return factorial * Integral.Trapezoid(t => Math.Pow(x - t, r - 1) * w(t), 0, x, 1 << 6);
             };
-            
-            // return x => 1.0 / Factorial(r - 1) * WalshTransform.PartialSum(t =>
-            //     Math.Pow(x - t, r - 1) * Get(k - r)(t), 1 << (int) Math.Ceiling(Math.Log(k, 2)))(x);
         }
 
         public static Func<double, double> GetOneK(int k)
@@ -51,8 +48,9 @@ namespace WalshSystem
             var t = (int) Math.Log(k, 2);
             var i = k - (1 << t);
             var pow2T = Math.Pow(2, t);
+            var w = Get(i);
 
-            return x => Get(i)(x) * 1 / pow2T * GetOneTwo(pow2T * x);
+            return x => w(x) * 1 / pow2T * GetOneTwo(pow2T * x);
         }
 
         private static double GetOneTwo(double x)

@@ -9,16 +9,24 @@ namespace Tests
     [TestFixture]
     public class WalshTransformTests
     {
+        private static double F(double x) =>
+            // Math.Sin(6 * Math.PI * t) + t;
+            x * x;
+
+        private static double Df(double x) =>
+            // 6 * Math.PI * Math.Cos(6 * Math.PI * x) + 1;
+            2 * x;
+
         [Test]
         public void ForwardTransform_InputArray_ReturnCorrectResult()
         {
-            ForwardTransform(new[] {1.0, 0, 1, 0}).Should().Equal(2, 0, 2, 0);
+            ForwardTransform(new[] {1.0, 0, 1, 0}).Should().Equal(.5, 0, .5, 0);
         }
 
         [Test]
         public void InverseTransform_InputCoefficientArray_ReturnCorrectResult()
         {
-            InverseTransform(new[] {2.0, 0, 2.0, 0}).Should().Equal(1, 0, 1, 0);
+            InverseTransform(new[] {.5, 0, .5, 0}).Should().Equal(1, 0, 1, 0);
         }
 
         [Test]
@@ -41,7 +49,7 @@ namespace Tests
         public void FastWalshHadamardTransformTest()
         {
             FastWalshHadamardTransform(new[] {1, 0, 1, 0, 0, 1, 1, 0.0})
-                .Should().Equal(4, 2, 0, -2, 0, 2, 0, 2);
+                .Should().Equal(.5, .25, 0, -.25, 0, .25, 0, .25);
         }
 
         [Test]
@@ -53,16 +61,19 @@ namespace Tests
             InverseFastWalshHadamardTransform(y).Should().Equal(x);
         }
 
-        [Test]
-        public void PartialSumOneKTest()
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        [TestCase(4)]
+        [TestCase(5)]
+        [TestCase(6)]
+        [TestCase(7)]
+        public void PartialSumOneKTest(int k)
         {
-            const int n = (1 << 2) + 1;
+            var n = 1 << k;
             var x = Enumerable.Range(0, n).Select(i => i / (n - 1.0)).ToArray();
             
-            double F(double t) => Math.Sin(6 * Math.PI * t) + t;
-            double Df(double t) => 6 * Math.PI * Math.Cos(6 * Math.PI * t) + 1;
-            
-            var s = PartialSumOneK(F, Df, n);
+            var s = PartialSumOneK(F, n);
             
             var actual = x.Select(d => s(d));
             var expected = x.Select(F);
@@ -80,10 +91,7 @@ namespace Tests
         {
             var x = Enumerable.Range(0, 1 << k).Select(i => i / ((1 << k) - 1.0)).ToArray();
 
-            double F(double t) => Math.Sin(6 * Math.PI * t) + t;
-            double Df(double t) => 6 * Math.PI * Math.Cos(6 * Math.PI * t) + 1;
-
-            var c = FastWalshSobolevTransform(Df, k);
+            var c = FastWalshSobolevTransform(Df, k).ToArray();
             var y = InverseFastWalshSobolevTransform(c, F(0));
 
             var actual = x.Select(d => y(d));
@@ -99,7 +107,7 @@ namespace Tests
             var x = Enumerable.Range(0, 1 << k).Select(i => i / ((1 << k) - 1.0)).ToArray();
             var f = x.Select(d => 2 * d * d).ToArray();
             
-            var c = FastWalshTransform(f);
+            var c = FastWalshTransform(f).ToArray();
 
             InverseFastWalshTransform(c).Should().Equal(f, (a, e) => Math.Abs(a - e) <= 1e-10);
         }
@@ -112,17 +120,23 @@ namespace Tests
         public void FastWalshTest(int k)
         {
             var n = 1 << k;
-            var x = Enumerable.Range(0, n).Select(i => i / (n - 1.0)).ToArray();
 
-            double F(double t) => Math.Sin(6 * Math.PI * t) + t;
-            double Df(double t) => 6 * Math.PI * Math.Cos(6 * Math.PI * t) + 1;
-            
-            var c1 = FastWalshSobolevTransform(Df, k)
-                .Select(d => d / n);
+            var c1 = FastWalshSobolevTransform(F, k);
             var c2 = Enumerable.Range(1, n)
-                .Select(i => GetCoefficientOneK(F, Df, i, n));
+                .Select(i => GetCoefficientOneK(F, i));
+            var c3 = Enumerable.Range(1, n)
+                .Select(i => GetCoefficientOneK(F, Df, i));
 
-            c1.Should().Equal(c2, (a, e) => Math.Abs(a - e) < 1e-10);
+
+            bool Comparison(double a, double b)
+            {
+                return Math.Abs(a - b) < 1e-10;
+            }
+
+            c1.Should()
+                .Equal(c2, Comparison)
+                .And
+                .Equal(c3, Comparison);
         }
     }
 }
