@@ -2,8 +2,8 @@
 using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
-using WalshSystem;
-using static WalshSystem.WalshTransform;
+using Walsh;
+using static Walsh.WalshTransform;
 
 namespace Tests
 {

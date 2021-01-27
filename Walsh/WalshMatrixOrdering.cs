@@ -1,9 +1,8 @@
-﻿namespace WalshSystem
+﻿namespace Walsh
 {
     public enum WalshMatrixOrdering
     {
         Dyadic,
-        // Sequency
         Natural
     }
 }

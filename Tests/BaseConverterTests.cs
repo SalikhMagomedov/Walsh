@@ -1,6 +1,6 @@
 ﻿using FluentAssertions;
 using NUnit.Framework;
-using static WalshSystem.BaseConverter;
+using static Walsh.BaseConverter;
 
 namespace Tests
 {

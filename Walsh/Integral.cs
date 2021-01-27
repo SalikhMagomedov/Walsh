@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 
-namespace WalshSystem
+namespace Walsh
 {
     public static class Integral
     {

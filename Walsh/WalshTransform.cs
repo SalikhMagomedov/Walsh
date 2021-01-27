@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace WalshSystem
+namespace Walsh
 {
     public static class WalshTransform
     {

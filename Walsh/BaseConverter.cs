@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace WalshSystem
+namespace Walsh
 {
     public static class BaseConverter
     {

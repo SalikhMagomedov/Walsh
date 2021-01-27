@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
-using WalshSystem;
-using static WalshSystem.Walsh;
+using Walsh;
+
+using static Walsh.Walsh;
 
 namespace Tests
 {
